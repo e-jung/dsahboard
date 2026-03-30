@@ -90,6 +90,26 @@ header .meta{color:#8b949e;font-size:13px;margin-right:12px}
 .status-btn{padding:4px 10px;border-radius:12px;font-size:12px;border:1px solid #30363d;background:#0d1117;color:#8b949e;cursor:pointer}
 .status-btn:hover{border-color:#58a6ff;color:#e1e4e8}
 .status-btn.active{border-color:#58a6ff;color:#58a6ff;background:#0c2d6b}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid #21262d;background:#161b22}
+.tab{padding:10px 20px;cursor:pointer;font-size:14px;color:#8b949e;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:#e1e4e8}
+.tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
+
+/* Memories view */
+.memories-view{padding:20px;transition:margin .2s}
+.mem-search{margin-bottom:20px}
+.mem-search input{width:100%;max-width:500px;padding:10px 14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e1e4e8;font-size:14px}
+.mem-search input:focus{outline:none;border-color:#58a6ff}
+.mem-stats{color:#8b949e;font-size:13px;margin-bottom:16px}
+.mem-group{margin-bottom:24px}
+.mem-date{font-size:13px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #21262d}
+.mem-card{background:#161b22;border:1px solid #21262d;border-radius:6px;padding:12px 16px;margin-bottom:6px;transition:border-color .15s}
+.mem-card:hover{border-color:#30363d}
+.mem-card .mem-text{font-size:14px;line-height:1.5;margin-bottom:4px}
+.mem-card .mem-meta{font-size:11px;color:#484f58;display:flex;gap:12px}
+.mem-card .mem-source{color:#58a6ff}
 </style>
 </head>
 <body>
@@ -106,18 +126,23 @@ header .meta{color:#8b949e;font-size:13px;margin-right:12px}
 
 <div id="app">
   <header>
-    <h1>🦀 Task Dashboard</h1>
-    <div class="actions">
+    <h1>🦀 <span id="page-title">Tasks</span></h1>
+    <div class="actions" id="header-actions">
       <span class="meta" id="stats"></span>
       <button class="btn" onclick="openNewTask()">+ Task</button>
       <button class="btn" onclick="openNewProject()">+ Project</button>
     </div>
   </header>
-  <div class="sidebar">
+  <div class="tabs">
+    <div class="tab active" data-tab="tasks" onclick="switchTab('tasks')">📋 Tasks</div>
+    <div class="tab" data-tab="memories" onclick="switchTab('memories')">🧠 Memories</div>
+  </div>
+  <div class="sidebar" id="sidebar">
     <h3>Projects</h3>
     <div id="projects"></div>
   </div>
   <div class="board" id="board"><div class="loading" style="text-align:center;padding:40px;color:#8b949e">Loading...</div></div>
+  <div class="memories-view" id="memories-view" style="display:none"></div>
   <div id="detail"><button class="close" onclick="closeDetail()">&times;</button><div class="content" id="detail-content"></div></div>
 </div>
 
@@ -126,7 +151,7 @@ header .meta{color:#8b949e;font-size:13px;margin-right:12px}
 <script>
 const SB='https://jfyxnxgjwntbegdyorfl.supabase.co',KEY='sb_publishable_PjGMV9JjA_cPSWPOoK-M6g_6qjKOwOR';
 const PW='OFB6RXh2NFBwVXNDcURwSGdqQUw=';
-let tasks=[],notes=[],projects=[],curProj=null,curDetail=null;
+let tasks=[],notes=[],projects=[],memories=[],curProj=null,curDetail=null,curTab='tasks',memSearch='';
 
 function auth(){if(btoa(document.getElementById('pw').value)===PW){sessionStorage.setItem('a','1');document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';load()}else document.getElementById('error').style.display='block'}
 document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')auth()});
@@ -141,7 +166,58 @@ async function load(){
   projects=await sb('projects','select=*&order=name');
   tasks=await sb('tasks','select=*,projects(name)&order=created_at.asc');
   notes=await sb('notes','select=*&order=created_at.desc');
+  memories=await sb('memories','select=id,metadata,created_at,updated_at&order=created_at.desc');
   render();
+}
+
+function switchTab(tab){
+  curTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.getElementById('board').style.display=tab==='tasks'?'flex':'none';
+  document.getElementById('memories-view').style.display=tab==='memories'?'block':'none';
+  document.getElementById('sidebar').style.display=tab==='tasks'?'block':'none';
+  document.getElementById('page-title').textContent=tab==='tasks'?'Tasks':'Memories';
+  document.getElementById('header-actions').innerHTML=tab==='tasks'
+    ?`<span class="meta" id="stats"></span><button class="btn" onclick="openNewTask()">+ Task</button><button class="btn" onclick="openNewProject()">+ Project</button>`
+    :`<span class="meta">${memories.length} memories</span>`;
+  if(tab==='memories')renderMemories();
+  if(tab==='tasks')render();
+}
+
+function renderMemories(){
+  let filtered=memories;
+  if(memSearch){
+    const q=memSearch.toLowerCase();
+    filtered=filtered.filter(m=>(m.metadata?.data||'').toLowerCase().includes(q));
+  }
+  // Group by date
+  const groups={};
+  filtered.forEach(m=>{
+    const d=(m.created_at||m.metadata?.created_at||'').split('T')[0]||'Unknown';
+    if(!groups[d])groups[d]=[];
+    groups[d].push(m);
+  });
+  const el=document.getElementById('memories-view');
+  if(!filtered.length){el.innerHTML=`<div class="mem-search"><input placeholder="Search memories..." value="${esc(memSearch)}" oninput="memSearch=this.value;renderMemories()"></div><div class="empty">No memories found</div>`;return}
+  el.innerHTML=`<div class="mem-search"><input placeholder="Search memories..." value="${esc(memSearch)}" oninput="memSearch=this.value;renderMemories()"></div><div class="mem-stats">Showing ${filtered.length} of ${memories.length} memories</div>`+
+    Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([date,mems])=>`
+      <div class="mem-group">
+        <div class="mem-date">${formatDate(date)} · ${mems.length} memories</div>
+        ${mems.map(m=>{
+          const data=m.metadata?.data||m.metadata?.text||'(no content)';
+          const src=m.metadata?.runId||m.metadata?.source||'';
+          const srcShort=src.replace('agent:main:telegram:direct:8556408615','Clawd').replace('agent:','').substring(0,40);
+          return`<div class="mem-card"><div class="mem-text">${esc(data)}</div><div class="mem-meta"><span class="mem-source">${esc(srcShort)}</span><span>${(m.created_at||'').split('T')[1]?.substring(0,5)||''}</span></div></div>`;
+        }).join('')}
+      </div>`).join('');
+}
+
+function formatDate(d){
+  const today=new Date().toISOString().split('T')[0];
+  const yesterday=new Date(Date.now()-86400000).toISOString().split('T')[0];
+  if(d===today)return'Today';
+  if(d===yesterday)return'Yesterday';
+  return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
 }
 
 function render(){
