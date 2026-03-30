@@ -170,11 +170,13 @@ async function sbPatch(table,id,body){return fetch(`${SB}/rest/v1/${table}?id=eq
 async function sbDel(table,id){return fetch(`${SB}/rest/v1/${table}?id=eq.${id}`,{method:'DELETE',headers:{apikey:KEY,Authorization:`Bearer ${KEY}`}})}
 
 async function load(){
+  try {
   projects=await sb('projects','select=*&order=name');
   tasks=await sb('tasks','select=*,projects(name)&order=created_at.asc');
   notes=await sb('notes','select=*&order=created_at.desc');
   memories=await sb('memories','select=id,metadata,created_at,updated_at&order=created_at.desc');
   render();
+  } catch(e){document.getElementById('board').innerHTML=`<div style="color:#f85149;padding:20px">Error: ${esc(e.message)}</div>`}
 }
 
 function switchTab(tab){
@@ -194,6 +196,7 @@ function switchTab(tab){
 }
 
 function renderMemories(){
+  try {
   let filtered=memories;
   if(memSearch){
     const q=memSearch.toLowerCase();
@@ -206,7 +209,9 @@ function renderMemories(){
     groups[d].push(m);
   });
   const el=document.getElementById('memories-view');
-  el.querySelector('#mem-list').innerHTML=!filtered.length?'<div class="empty">No memories found</div>':
+  const list=el.querySelector('#mem-list');
+  if(!list){el.innerHTML='ERROR: mem-list not found';return}
+  list.innerHTML=!filtered.length?'<div class="empty">No memories found</div>':
     `<div class="mem-stats">Showing ${filtered.length} of ${memories.length} memories</div>`+
     Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([date,mems])=>`
       <div class="mem-group">
@@ -221,6 +226,7 @@ function renderMemories(){
         </div>
       </div>`).join('');
   el.querySelector('#mem-count').textContent=`${filtered.length} of ${memories.length}`;
+  } catch(e){console.error('renderMemories error:',e)}
 }
 
 function formatDate(d){
