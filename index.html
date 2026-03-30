@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clawd Task Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+
+/* Login */
+#login { display: flex; align-items: center; justify-content: center; height: 100vh; background: #0f1117; }
+#login-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 40px; text-align: center; }
+#login-box h1 { font-size: 24px; margin-bottom: 8px; }
+#login-box p { color: #8b949e; margin-bottom: 24px; }
+#login-box input { width: 100%; padding: 10px 14px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #e1e4e8; font-size: 14px; margin-bottom: 16px; }
+#login-box button { width: 100%; padding: 10px; background: #238636; border: none; border-radius: 6px; color: white; font-size: 14px; cursor: pointer; }
+#login-box button:hover { background: #2ea043; }
+#error { color: #f85149; font-size: 13px; margin-top: 8px; display: none; }
+
+/* Dashboard */
+#app { display: none; }
+header { background: #161b22; border-bottom: 1px solid #21262d; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+header h1 { font-size: 18px; }
+header .meta { color: #8b949e; font-size: 13px; }
+
+/* Sidebar */
+.sidebar { position: fixed; left: 0; top: 49px; bottom: 0; width: 220px; background: #161b22; border-right: 1px solid #21262d; padding: 16px 0; overflow-y: auto; }
+.sidebar h3 { font-size: 11px; text-transform: uppercase; color: #8b949e; padding: 0 16px; margin-bottom: 8px; letter-spacing: 0.5px; }
+.sidebar .item { padding: 8px 16px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.sidebar .item:hover { background: #21262d; }
+.sidebar .item.active { background: #21262d; border-left: 2px solid #58a6ff; }
+.sidebar .count { margin-left: auto; background: #21262d; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #8b949e; }
+
+/* Kanban */
+.board { margin-left: 220px; padding: 20px; display: flex; gap: 16px; overflow-x: auto; min-height: calc(100vh - 49px); }
+.column { flex: 0 0 300px; background: #0d1117; border: 1px solid #21262d; border-radius: 8px; max-height: calc(100vh - 90px); display: flex; flex-direction: column; }
+.col-header { padding: 12px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid #21262d; display: flex; align-items: center; gap: 8px; }
+.col-header .badge { font-size: 12px; color: #8b949e; font-weight: normal; }
+.col-body { padding: 8px; overflow-y: auto; flex: 1; }
+
+/* Cards */
+.card { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s; }
+.card:hover { border-color: #388bfd; }
+.card .title { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+.card .meta { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.priority { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+.priority.urgent { background: #490202; color: #f85149; }
+.priority.high { background: #3d1e00; color: #d29922; }
+.priority.medium { background: #0c2d6b; color: #58a6ff; }
+.priority.low { background: #0d1117; color: #8b949e; border: 1px solid #30363d; }
+.project-tag { color: #8b949e; }
+.due { color: #8b949e; }
+.due.overdue { color: #f85149; }
+
+/* Detail panel */
+#detail { position: fixed; right: 0; top: 49px; bottom: 0; width: 400px; background: #161b22; border-left: 1px solid #21262d; transform: translateX(100%); transition: transform 0.2s; z-index: 20; overflow-y: auto; }
+#detail.open { transform: translateX(0); }
+#detail .close { position: absolute; top: 12px; right: 12px; background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; }
+#detail .content { padding: 24px; }
+#detail h2 { font-size: 18px; margin-bottom: 16px; padding-right: 30px; }
+#detail .field { margin-bottom: 16px; }
+#detail .label { font-size: 12px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px; }
+#detail .notes { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.5; }
+#detail .notes:empty { display: none; }
+.empty { color: #8b949e; font-size: 13px; padding: 20px; text-align: center; }
+
+/* Loading */
+.loading { text-align: center; padding: 40px; color: #8b949e; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div id="login-box">
+    <h1>🦀 Clawd Dashboard</h1>
+    <p>Enter password to access</p>
+    <input type="password" id="pw" placeholder="Password" autofocus>
+    <button onclick="authenticate()">Access</button>
+    <div id="error">Wrong password</div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>🦀 Task Dashboard</h1>
+    <div class="meta" id="stats"></div>
+  </header>
+  <div class="sidebar">
+    <h3>Projects</h3>
+    <div id="projects"></div>
+    <h3 style="margin-top:24px">Status</h3>
+    <div class="item active" onclick="filterStatus('all')">All Tasks</div>
+  </div>
+  <div class="board" id="board">
+    <div class="loading">Loading tasks...</div>
+  </div>
+  <div id="detail">
+    <button class="close" onclick="closeDetail()">&times;</button>
+    <div class="content" id="detail-content"></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://jfyxnxgjwntbegdyorfl.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PjGMV9JjA_cPSWPOoK-M6g_6qjKOwOR';
+const PASSWORD_HASH = '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8'; // sha256("password")
+
+let allTasks = [], allNotes = [], currentProject = null, currentStatus = 'all';
+
+function sha256(str) {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(b => Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,'0')).join(''));
+}
+
+async function authenticate() {
+  const pw = document.getElementById('pw').value;
+  const hash = await sha256(pw);
+  if (hash === PASSWORD_HASH) {
+    sessionStorage.setItem('auth', '1');
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    load();
+  } else {
+    document.getElementById('error').style.display = 'block';
+  }
+}
+document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') authenticate(); });
+if (sessionStorage.getItem('auth') === '1') { document.getElementById('login').style.display = 'none'; document.getElementById('app').style.display = 'block'; load(); }
+
+async function supabase(table, query = '') {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  });
+  return r.json();
+}
+
+async function load() {
+  allTasks = await supabase('tasks', 'select=*,projects(name)&order=created_at.asc');
+  allNotes = await supabase('notes', 'select=*&order=created_at.desc');
+  const projects = await supabase('projects', 'select=*,tasks(count)&order=name');
+  renderProjects(projects);
+  renderBoard();
+}
+
+function renderProjects(projects) {
+  const el = document.getElementById('projects');
+  const counts = { all: allTasks.length };
+  projects.forEach(p => {
+    const c = allTasks.filter(t => t.project_id === p.id && t.status !== 'archived').length;
+    counts[p.id] = c;
+  });
+  el.innerHTML = `<div class="item ${!currentProject ? 'active' : ''}" onclick="filterProject(null)">All <span class="count">${counts.all}</span></div>` +
+    projects.filter(p => p.status !== 'archived').map(p =>
+      `<div class="item ${currentProject === p.id ? 'active' : ''}" onclick="filterProject('${p.id}')">${p.name} <span class="count">${counts[p.id] || 0}</span></div>`
+    ).join('');
+}
+
+function filterProject(id) { currentProject = id; load(); }
+function filterStatus(s) { currentStatus = s; load(); }
+
+function renderBoard() {
+  const filtered = allTasks.filter(t => {
+    if (t.status === 'archived') return false;
+    if (currentProject && t.project_id !== currentProject) return false;
+    return true;
+  });
+  const statuses = ['backlog', 'todo', 'in_progress', 'done'];
+  const labels = { backlog: '📋 Backlog', todo: '📌 To Do', in_progress: '🔄 In Progress', done: '✅ Done' };
+  const board = document.getElementById('board');
+  const total = filtered.length, done = filtered.filter(t => t.status === 'done').length;
+  document.getElementById('stats').textContent = `${total} tasks · ${done} done`;
+
+  board.innerHTML = statuses.map(s => {
+    const tasks = filtered.filter(t => t.status === s);
+    return `<div class="column">
+      <div class="col-header">${labels[s]} <span class="badge">${tasks.length}</span></div>
+      <div class="col-body">${tasks.length ? tasks.map(cardHTML).join('') : '<div class="empty">No tasks</div>'}</div>
+    </div>`;
+  }).join('');
+}
+
+function cardHTML(t) {
+  const overdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done';
+  const project = t.projects?.name || '';
+  return `<div class="card" onclick="showDetail('${t.id}')">
+    <div class="title">${t.title}</div>
+    <div class="meta">
+      <span class="priority ${t.priority}">${t.priority}</span>
+      ${project ? `<span class="project-tag">@${project}</span>` : ''}
+      ${t.due_date ? `<span class="due ${overdue ? 'overdue' : ''}">${t.due_date}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function showDetail(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t) return;
+  const notes = allNotes.filter(n => n.task_id === id);
+  const project = t.projects?.name || 'None';
+  document.getElementById('detail-content').innerHTML = `
+    <h2>${t.title}</h2>
+    <div class="field"><div class="label">Status</div>${t.status}</div>
+    <div class="field"><div class="label">Priority</div><span class="priority ${t.priority}">${t.priority}</span></div>
+    <div class="field"><div class="label">Project</div>${project}</div>
+    ${t.due_date ? `<div class="field"><div class="label">Due Date</div>${t.due_date}</div>` : ''}
+    ${t.source ? `<div class="field"><div class="label">Source</div>${t.source}</div>` : ''}
+    ${t.description ? `<div class="field"><div class="label">Description</div><div class="notes">${t.description}</div></div>` : ''}
+    ${notes.length ? `<div class="field"><div class="label">Notes (${notes.length})</div>${notes.map(n => `<div class="notes" style="margin-bottom:8px">${n.content}<div style="color:#8b949e;font-size:11px;margin-top:4px">${n.created_at} · ${n.source || ''}</div></div>`).join('')}</div>` : ''}
+  `;
+  document.getElementById('detail').classList.add('open');
+}
+
+function closeDetail() { document.getElementById('detail').classList.remove('open'); }
+</script>
+</body>
+</html>
